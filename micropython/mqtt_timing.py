@@ -1,4 +1,4 @@
-
+from wifi_password import *
 import ntptime    
 import time    
 from umqttsimple import MQTTClient
@@ -15,10 +15,6 @@ gc.collect()
 # connect to wifi
 
 # 
-ssid = 'REPLACE_WITH_YOUR_SSID'
-password = 'REPLACE_WITH_YOUR_PASSWORD'
-
-
 
 def do_connect():
     import network
@@ -26,7 +22,7 @@ def do_connect():
     if not sta_if.isconnected():
         print('connecting to network...')
         sta_if.active(True)
-        sta_if.connect(ssid, password)
+        sta_if.connect(wifi_ssid, wifi_password)
         while not sta_if.isconnected():
             pass
     print('network config:', sta_if.ifconfig())
@@ -49,6 +45,7 @@ client_id = ubinascii.hexlify(machine.unique_id())
 topic_sub = b'robot/notify'
 topic_pub = b'robot/time/'+client_id
 topic_pub_stats= b'robot/stats/'+client_id
+topic_pub_last_will= b'robot/stats/'+client_id+'/online'
 
 last_message = 0
 message_interval = 5
@@ -67,10 +64,14 @@ def sub_cb(topic, msg):
 
 def connect_and_subscribe():
   global client_id, mqtt_server, topic_sub
-  client = MQTTClient(client_id, mqtt_server)
+  # keepalive 20s; after that last will is transmitted by mqtt broker
+  client = MQTTClient(client_id, mqtt_server,keepalive=20)
   client.set_callback(sub_cb)
+  # set last will, retain so that newly connected clients get an update upon connecting
+  client.set_last_will(topic_pub_last_will,b'False',retain=True)
   client.connect()
   client.subscribe(topic_sub)
+  client.publish(topic_pub_last_will,b'True')
   print('Connected to %s MQTT broker, subscribed to %s topic' % (mqtt_server, topic_sub))
   return client
 
@@ -94,3 +95,4 @@ while True:
       counter += 1
   except OSError as e:
     restart_and_reconnect()
+
